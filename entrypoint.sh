@@ -29,7 +29,7 @@ for ONE_RESOLVER in ${RESOLVERS}; do
 done
 
 echo "Final chosen resolver: $conf"
-confpath=/etc/nginx/resolvers.conf
+confpath=/etc/angie/resolvers.conf
 if [ ! -e $confpath ]
 then
     echo "Using auto-determined resolver '$conf' via '$confpath'"
@@ -43,14 +43,14 @@ ALLDOMAINS=""
 
 # Interceptions map, which are the hosts that will be handled by the caching part.
 # It should list exactly the same hosts we have created certificates for -- if not, Docker will get TLS errors, of course.
-echo -n "" > /etc/nginx/docker.intercept.map
+echo -n "" > /etc/angie/docker.intercept.map
 
 # Some hosts/registries are always needed, but others can be configured in env var REGISTRIES
 for ONEREGISTRYIN in docker.caching.proxy.internal registry-1.docker.io auth.docker.io ${REGISTRIES}; do
     ONEREGISTRY=$(echo ${ONEREGISTRYIN} | xargs) # Remove whitespace
     echo "Adding certificate for registry: $ONEREGISTRY"
     ALLDOMAINS="${ALLDOMAINS},DNS:${ONEREGISTRY}"
-    echo "${ONEREGISTRY} 127.0.0.1:443;" >> /etc/nginx/docker.intercept.map
+    echo "${ONEREGISTRY} 127.0.0.1:443;" >> /etc/angie/docker.intercept.map
 done
 
 # Clean the list and generate certificates.
@@ -59,10 +59,10 @@ export ALLDOMAINS=${ALLDOMAINS:1} # remove the first comma and export
 
 # Target host interception. Empty by default. Used to intercept outgoing requests
 # from the proxy to the registries.
-echo -n "" > /etc/nginx/docker.targetHost.map
+echo -n "" > /etc/angie/docker.targetHost.map
 
 # Now handle the auth part.
-echo -n "" > /etc/nginx/docker.auth.map
+echo -n "" > /etc/angie/docker.auth.map
 
 # Only configure auth registries if the env var contains values
 if [ "$AUTH_REGISTRIES" ]; then
@@ -89,66 +89,67 @@ if [ "$AUTH_REGISTRIES" ]; then
         AUTH_PASS="${registry_array[2]}"
         AUTH_BASE64=$(echo -n ${AUTH_USER}:${AUTH_PASS} | base64 -w0 | xargs)
         echo "Adding Auth for registry '${AUTH_HOST}' with user '${AUTH_USER}'."
-        echo "\"${AUTH_HOST}\" \"${AUTH_BASE64}\";" >> /etc/nginx/docker.auth.map
+        echo "\"${AUTH_HOST}\" \"${AUTH_BASE64}\";" >> /etc/angie/docker.auth.map
     done
 fi
 
 # create default config for the caching layer to listen on 443.
-echo "        listen 443 ssl default_server;" > /etc/nginx/caching.layer.listen
-echo "error_log  /var/log/nginx/error.log warn;" > /etc/nginx/error.log.debug.warn
+echo "        listen 443 ssl default_server;" > /etc/angie/caching.layer.listen
+echo "error_log  /var/log/angie/error.log warn;" > /etc/angie/error.log.debug.warn
 
 # Set Docker Registry cache size, by default, 32 GB ('32g')
 CACHE_MAX_SIZE=${CACHE_MAX_SIZE:-32g}
 
 # The cache directory. This can get huge. Better to use a Docker volume pointing here!
 # Set to 32gb which should be enough
-echo "proxy_cache_path /docker_mirror_cache levels=1:2 max_size=$CACHE_MAX_SIZE inactive=60d keys_zone=cache:10m use_temp_path=off;" > /etc/nginx/conf.d/cache_max_size.conf
+mkdir -p /etc/angie/conf.d
+echo "proxy_cache_path /docker_mirror_cache levels=1:2 max_size=$CACHE_MAX_SIZE inactive=60d keys_zone=cache:10m use_temp_path=off;" > /etc/angie/conf.d/cache_max_size.conf
 
 # Manifest caching configuration. We generate config based on the environment vars.
-echo -n "" >/etc/nginx/nginx.manifest.caching.config.conf
+echo -n "" >/etc/angie/angie.manifest.caching.config.conf
 
-[[ "a${ENABLE_MANIFEST_CACHE}" == "atrue" ]] && [[ "a${MANIFEST_CACHE_PRIMARY_REGEX}" != "a" ]] && cat <<EOD >>/etc/nginx/nginx.manifest.caching.config.conf
+[[ "a${ENABLE_MANIFEST_CACHE}" == "atrue" ]] && [[ "a${MANIFEST_CACHE_PRIMARY_REGEX}" != "a" ]] && cat <<EOD >>/etc/angie/angie.manifest.caching.config.conf
     # First tier caching of manifests; configure via MANIFEST_CACHE_PRIMARY_REGEX and MANIFEST_CACHE_PRIMARY_TIME
     location ~ ^/v2/(.*)/manifests/${MANIFEST_CACHE_PRIMARY_REGEX} {
         set \$docker_proxy_request_type "manifest-primary";
         proxy_cache_valid ${MANIFEST_CACHE_PRIMARY_TIME};
-        include "/etc/nginx/nginx.manifest.stale.conf";
+        include "/etc/angie/angie.manifest.stale.conf";
     }
 EOD
 
-[[ "a${ENABLE_MANIFEST_CACHE}" == "atrue" ]] && [[ "a${MANIFEST_CACHE_SECONDARY_REGEX}" != "a" ]] && cat <<EOD >>/etc/nginx/nginx.manifest.caching.config.conf
+[[ "a${ENABLE_MANIFEST_CACHE}" == "atrue" ]] && [[ "a${MANIFEST_CACHE_SECONDARY_REGEX}" != "a" ]] && cat <<EOD >>/etc/angie/angie.manifest.caching.config.conf
     # Secondary tier caching of manifests; configure via MANIFEST_CACHE_SECONDARY_REGEX and MANIFEST_CACHE_SECONDARY_TIME
     location ~ ^/v2/(.*)/manifests/${MANIFEST_CACHE_SECONDARY_REGEX} {
         set \$docker_proxy_request_type "manifest-secondary";
         proxy_cache_valid ${MANIFEST_CACHE_SECONDARY_TIME};
-        include "/etc/nginx/nginx.manifest.stale.conf";
+        include "/etc/angie/angie.manifest.stale.conf";
     }
 EOD
 
-[[ "a${ENABLE_MANIFEST_CACHE}" == "atrue" ]] && cat <<EOD >>/etc/nginx/nginx.manifest.caching.config.conf
+[[ "a${ENABLE_MANIFEST_CACHE}" == "atrue" ]] && cat <<EOD >>/etc/angie/angie.manifest.caching.config.conf
     # Default tier caching for manifests. Caches for ${MANIFEST_CACHE_DEFAULT_TIME} (from MANIFEST_CACHE_DEFAULT_TIME)
     location ~ ^/v2/(.*)/manifests/ {
         set \$docker_proxy_request_type "manifest-default";
         proxy_cache_valid ${MANIFEST_CACHE_DEFAULT_TIME};
-        include "/etc/nginx/nginx.manifest.stale.conf";
+        include "/etc/angie/angie.manifest.stale.conf";
     }
 EOD
 
-[[ "a${ENABLE_MANIFEST_CACHE}" != "atrue" ]] && cat <<EOD >>/etc/nginx/nginx.manifest.caching.config.conf
+[[ "a${ENABLE_MANIFEST_CACHE}" != "atrue" ]] && cat <<EOD >>/etc/angie/angie.manifest.caching.config.conf
     # Manifest caching is disabled. Enable it with ENABLE_MANIFEST_CACHE=true
     location ~ ^/v2/(.*)/manifests/ {
         set \$docker_proxy_request_type "manifest-default-disabled";
         proxy_cache_valid 0s;
-        include "/etc/nginx/nginx.manifest.stale.conf";
+        include "/etc/angie/angie.manifest.stale.conf";
     }
 EOD
 
 echo -e "\nManifest caching config: ---\n"
-cat /etc/nginx/nginx.manifest.caching.config.conf
+cat /etc/angie/angie.manifest.caching.config.conf
 echo "---"
 
 if [[ "a${ALLOW_PUSH}" == "atrue" ]]; then
-    cat <<EOF > /etc/nginx/conf.d/allowed.methods.conf
+    cat <<EOF > /etc/angie/conf.d/allowed.methods.conf
     # allow to upload big layers
     client_max_body_size 0;
 
@@ -156,7 +157,7 @@ if [[ "a${ALLOW_PUSH}" == "atrue" ]]; then
     proxy_cache_methods GET;
 EOF
 else
-    cat << 'EOF' > /etc/nginx/conf.d/allowed.methods.conf
+    cat << 'EOF' > /etc/angie/conf.d/allowed.methods.conf
     # Block POST/PUT/DELETE. Don't use this proxy for pushing.
     if ($request_method = POST) {
         return 405 "POST method is not allowed";
@@ -171,7 +172,7 @@ EOF
 fi
 
 # normally use non-debug version of nginx
-NGINX_BIN="/usr/sbin/nginx"
+NGINX_BIN="/usr/sbin/angie"
 
 if [[ "a${DEBUG}" == "atrue" ]]; then
   if [[ ! -f /usr/bin/mitmweb ]]; then
@@ -180,7 +181,7 @@ if [[ "a${DEBUG}" == "atrue" ]]; then
   fi
 
   # in debug mode, change caching layer to listen on 444, so that mitmproxy can sit in the middle.
-  echo "        listen 444 ssl default_server;" > /etc/nginx/caching.layer.listen
+  echo "        listen 444 ssl default_server;" > /etc/angie/caching.layer.listen
 
   echo "Starting in DEBUG MODE (mitmproxy)."  >&2
   echo "Run mitmproxy with reverse pointing to the same certs..."
@@ -199,7 +200,7 @@ if [[ "a${DEBUG_HUB}" == "atrue" ]]; then
   fi
 
   # in debug hub mode, we remap targetHost to point to mitmproxy below
-  echo "\"registry-1.docker.io\" \"127.0.0.1:445\";" > /etc/nginx/docker.targetHost.map
+  echo "\"registry-1.docker.io\" \"127.0.0.1:445\";" > /etc/angie/docker.targetHost.map
 
   echo "Debugging outgoing DockerHub connections via mitmproxy on 8082."  >&2
   # this one has keep_host_header=false so we don't need to modify nginx config
@@ -216,21 +217,21 @@ if [[ "a${DEBUG_HUB}" == "atrue" ]]; then
 fi
 
 if [[ "a${DEBUG_NGINX}" == "atrue" ]]; then
-  if [[ ! -f /usr/sbin/nginx-debug ]]; then
+  if [[ ! -f /usr/sbin/angie-debug ]]; then
     echo "To debug, you need the -debug version of this image, eg: :latest-debug"
     exit 4
   fi
 
   echo "Starting in DEBUG MODE (nginx)."
-  echo "error_log  /var/log/nginx/error.log debug;" > /etc/nginx/error.log.debug.warn
+  echo "error_log  /var/log/angie/error.log debug;" > /etc/angie/error.log.debug.warn
   # use debug binary
-  NGINX_BIN="/usr/sbin/nginx-debug"
+  NGINX_BIN="/usr/sbin/angie-debug"
 fi
 
 
 # Timeout configurations
-echo "" > /etc/nginx/nginx.timeouts.config.conf
-cat <<EOD >>/etc/nginx/nginx.timeouts.config.conf
+echo "" > /etc/angie/angie.timeouts.config.conf
+cat <<EOD >>/etc/angie/angie.timeouts.config.conf
   # Timeouts
 
   # ngx_http_core_module
@@ -251,13 +252,13 @@ cat <<EOD >>/etc/nginx/nginx.timeouts.config.conf
 EOD
 
 echo -e "\nTimeout configs: ---"
-cat /etc/nginx/nginx.timeouts.config.conf
+cat /etc/angie/angie.timeouts.config.conf
 echo -e "---\n"
 
 # Request buffering
-echo "" > /etc/nginx/proxy.request.buffering.conf
+echo "" > /etc/angie/proxy.request.buffering.conf
 if [[ "a${PROXY_REQUEST_BUFFERING}" == "afalse" ]]; then
-  cat << EOD > /etc/nginx/proxy.request.buffering.conf
+  cat << EOD > /etc/angie/proxy.request.buffering.conf
   proxy_max_temp_file_size 0;
   proxy_request_buffering off;
   proxy_http_version 1.1;
@@ -265,13 +266,13 @@ EOD
 fi
 
 echo -e "\nRequest buffering: ---"
-cat /etc/nginx/proxy.request.buffering.conf
+cat /etc/angie/proxy.request.buffering.conf
 echo -e "---\n"
 
 # Upstream SSL verification.
-echo "" > /etc/nginx/docker.verify.ssl.conf
+echo "" > /etc/angie/docker.verify.ssl.conf
 if [[ "a${VERIFY_SSL}" == "atrue" ]]; then
-    cat << EOD > /etc/nginx/docker.verify.ssl.conf
+    cat << EOD > /etc/angie/docker.verify.ssl.conf
     # We actually wanna be secure and avoid mitm attacks.
     # Fitting, since this whole thing is a mitm...
     # We'll accept any cert signed by a CA trusted by Mozilla (ca-certificates-bundle in alpine)

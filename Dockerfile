@@ -1,34 +1,32 @@
 # We start from my nginx fork which includes the proxy-connect module from tEngine
 # Source is available at https://github.com/rpardini/nginx-proxy-connect-stable-alpine
 # This is already multi-arch!
-ARG BASE_IMAGE="docker.io/rpardini/nginx-proxy-connect-stable-alpine:nginx-1.20.1-alpine-3.12.7"
+ARG BASE_IMAGE="docker.io/runalsh/angie:proxy3"
 # Could be "-debug"
 ARG BASE_IMAGE_SUFFIX=""
-FROM ${BASE_IMAGE}${BASE_IMAGE_SUFFIX}
-
-# Link image to original repository on GitHub
-LABEL org.opencontainers.image.source https://github.com/rpardini/docker-registry-proxy
-
+# FROM ${BASE_IMAGE}${BASE_IMAGE_SUFFIX}
+FROM runalsh/angie:proxy3
+USER root
 # apk packages that will be present in the final image both debug and release
-RUN apk add --no-cache --update bash ca-certificates-bundle coreutils openssl
+RUN apk add --no-cache bash ca-certificates-bundle coreutils openssl
 
-# If set to 1, enables building mitmproxy, which helps a lot in debugging, but is super heavy to build.
-ARG DEBUG_BUILD="1"
-ENV DO_DEBUG_BUILD="$DEBUG_BUILD"
+# # If set to 1, enables building mitmproxy, which helps a lot in debugging, but is super heavy to build.
+# ARG DEBUG_BUILD="0"
+# ENV DO_DEBUG_BUILD="$DEBUG_BUILD"
 
-# Build mitmproxy via pip. This is heavy, takes minutes do build and creates a 90mb+ layer. Oh well.
-RUN [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { echo "Debug build ENABLED." \
- && apk add --no-cache --update su-exec git g++ libffi libffi-dev libstdc++ openssl-dev python3 python3-dev py3-pip py3-wheel py3-six py3-idna py3-certifi py3-setuptools \
- && LDFLAGS=-L/lib pip install MarkupSafe==2.0.1 mitmproxy==5.2 \
- && apk del --purge git g++ libffi-dev openssl-dev python3-dev py3-pip py3-wheel \
- && rm -rf ~/.cache/pip \
- ; } || { echo "Debug build disabled." ; }
+# # Build mitmproxy via pip. This is heavy, takes minutes do build and creates a 90mb+ layer. Oh well.
+# RUN [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { echo "Debug build ENABLED." \
+#  && apk add --no-cache --update su-exec git g++ libffi libffi-dev libstdc++ openssl-dev python3 python3-dev py3-pip py3-wheel py3-six py3-idna py3-certifi py3-setuptools \
+#  && LDFLAGS=-L/lib pip install MarkupSafe==2.0.1 mitmproxy==5.2 \
+#  && apk del --purge git g++ libffi-dev openssl-dev python3-dev py3-pip py3-wheel \
+#  && rm -rf ~/.cache/pip \
+#  ; } || { echo "Debug build disabled." ; }
 
 # Required for mitmproxy
 ENV LANG=en_US.UTF-8
 
 # Check the installed mitmproxy version, if built.
-RUN [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { mitmproxy --version && mitmweb --version ; } || { echo "Debug build disabled."; }
+# RUN [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { mitmproxy --version && mitmweb --version ; } || { echo "Debug build disabled."; }
 
 # Create the cache directory and CA directory
 RUN mkdir -p /docker_mirror_cache /ca
@@ -41,9 +39,9 @@ VOLUME /docker_mirror_cache
 VOLUME /ca
 
 # Add our configuration
-ADD nginx.conf /etc/nginx/nginx.conf
-ADD nginx.manifest.common.conf /etc/nginx/nginx.manifest.common.conf
-ADD nginx.manifest.stale.conf /etc/nginx/nginx.manifest.stale.conf
+ADD nginx.conf /etc/angie/angie.conf
+ADD nginx.manifest.common.conf /etc/angie/angie.manifest.common.conf
+ADD nginx.manifest.stale.conf /etc/angie/angie.manifest.stale.conf
 
 # Add our very hackish entrypoint and ca-building scripts, make them executable
 ADD entrypoint.sh /entrypoint.sh
@@ -60,7 +58,8 @@ EXPOSE 8082
 
 ## Default envs.
 # A space delimited list of registries we should proxy and cache; this is in addition to the central DockerHub.
-ENV REGISTRIES="k8s.gcr.io gcr.io quay.io"
+#ENV REGISTRIES="k8s.gcr.io gcr.io quay.io"
+ENV REGISTRIES=""
 # A space delimited list of registry:user:password to inject authentication for
 ENV AUTH_REGISTRIES="some.authenticated.registry:oneuser:onepassword another.registry:user:password"
 # Should we verify upstream's certificates? Default to true.
