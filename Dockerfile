@@ -9,7 +9,6 @@ FROM runalsh/angie:proxy3
 USER root
 # apk packages that will be present in the final image both debug and release
 RUN apk add --no-cache bash ca-certificates-bundle coreutils openssl
-
 # # If set to 1, enables building mitmproxy, which helps a lot in debugging, but is super heavy to build.
 # ARG DEBUG_BUILD="0"
 # ENV DO_DEBUG_BUILD="$DEBUG_BUILD"
