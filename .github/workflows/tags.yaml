@@ -66,24 +66,9 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          tags: rpardini/docker-registry-proxy:${{ steps.get_version.outputs.version }},ghcr.io/rpardini/docker-registry-proxy:${{ steps.get_version.outputs.version }}
+          tags: runalsh/docker-registry-proxy:${{ steps.get_version.outputs.version }},ghcr.io/runalsh/docker-registry-proxy:${{ steps.get_version.outputs.version }}
           push: true
           cache-from: type=local,src=/tmp/.buildx-cache/release
-          # first run does not export the cache
-
-      - name: Build and push amd64 Debug Docker Image to DockerHub/GitHub CR
-        uses: docker/build-push-action@v2
-        with:
-          build-args: |
-            DEBUG_BUILD=1
-            BASE_IMAGE_SUFFIX=-debug
-          builder: ${{ steps.buildx.outputs.name }}
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          tags: rpardini/docker-registry-proxy:${{ steps.get_version.outputs.version }}-debug,ghcr.io/rpardini/docker-registry-proxy:${{ steps.get_version.outputs.version }}-debug
-          push: true
-          cache-from: type=local,src=/tmp/.buildx-cache/debug
           # first run does not export the cache
 
       # Do it all again with both archs. the amd64 will be a huge cache hit
@@ -98,23 +83,10 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/arm64,linux/amd64
-          tags: rpardini/docker-registry-proxy:${{ steps.get_version.outputs.version }},ghcr.io/rpardini/docker-registry-proxy:${{ steps.get_version.outputs.version }}
+          tags: runalsh/docker-registry-proxy:${{ steps.get_version.outputs.version }},ghcr.io/runalsh/docker-registry-proxy:${{ steps.get_version.outputs.version }}
           push: true
           cache-from: type=local,src=/tmp/.buildx-cache/release
           cache-to: type=local,mode=max,dest=/tmp/.buildx-cache/release
 
-      - name: Build and push multiarch Debug Docker Image to DockerHub/GitHub CR
-        uses: docker/build-push-action@v2
-        with:
-          build-args: |
-            DEBUG_BUILD=1
-            BASE_IMAGE_SUFFIX=-debug
-          builder: ${{ steps.buildx.outputs.name }}
-          context: .
-          file: ./Dockerfile
-          platforms: linux/arm64,linux/amd64
-          tags: rpardini/docker-registry-proxy:${{ steps.get_version.outputs.version }}-debug,ghcr.io/rpardini/docker-registry-proxy:${{ steps.get_version.outputs.version }}-debug
-          push: true
-          cache-from: type=local,src=/tmp/.buildx-cache/debug
-          cache-to: type=local,mode=max,dest=/tmp/.buildx-cache/debug
+
 
