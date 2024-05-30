@@ -11,7 +11,7 @@ services:
       - ALLOW_PUSH=true
     volumes:
       # Format: <host-path>:<container-path>; adapt to your needs
-      - ./root/docker-registry-proxy_cache:/docker_mirror_cache # This will be up to CACHE_MAX_SIZE big
-      - ./root/docker-registry-proxy_certs:/ca
+      - ./docker-registry-proxy_cache:/docker_mirror_cache # This will be up to CACHE_MAX_SIZE big
+      - ./docker-registry-proxy_certs:/ca
     ports:
       - 0.0.0.0:3128:3128 # 0.0.0.0 binds to all interfaces

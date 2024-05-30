@@ -1,5 +1,5 @@
 .idea
 *.iml
-**/docker_mirror_cache
-**/docker_mirror_certs
-secrets.env
+**/docker-registry-proxy_cache
+**/docker-registry-proxy_certs
+**/secrets.env
